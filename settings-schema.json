@@ -1,0 +1,102 @@
+{
+    "layout": {
+        "type": "layout",
+        "pages": ["page-general", "page-appearance"],
+        "page-general": {
+            "type": "page",
+            "title": "General panel options",
+            "sections": ["sec-split", "sec-margins", "sec-shape"]
+        },
+        "page-appearance": {
+            "type": "page",
+            "title": "Appearance",
+            "sections": ["sec-colour"]
+        },
+        "sec-split": {
+            "type": "section",
+            "title": "Zones",
+            "keys": ["separate", "gap"]
+        },
+        "sec-margins": {
+            "type": "section",
+            "title": "Margin (space between the panel and the screen edges)",
+            "keys": ["margin-top", "margin-right", "margin-bottom", "margin-left"]
+        },
+        "sec-shape": {
+            "type": "section",
+            "title": "Shape",
+            "keys": ["radius", "padding"]
+        },
+        "sec-colour": {
+            "type": "section",
+            "title": "Background",
+            "keys": ["background", "transparency"]
+        }
+    },
+    "separate": {
+        "type": "switch",
+        "default": false,
+        "description": "Separate the panel into left, center and right",
+        "tooltip": "Each zone with applets becomes its own pill, as wide as its applets. Empty zones are not drawn."
+    },
+    "gap": {
+        "type": "spinbutton",
+        "default": 8,
+        "min": 0,
+        "max": 80,
+        "step": 1,
+        "units": "px",
+        "dependency": "separate",
+        "description": "Gap between the zones",
+        "tooltip": "The smallest space kept between two pills when the zones grow towards each other."
+    },
+    "margin-top": {
+        "type": "spinbutton", "default": 4, "min": 0, "max": 60, "step": 1, "units": "px",
+        "description": "Top"
+    },
+    "margin-right": {
+        "type": "spinbutton", "default": 8, "min": 0, "max": 400, "step": 1, "units": "px",
+        "description": "Right"
+    },
+    "margin-bottom": {
+        "type": "spinbutton", "default": 4, "min": 0, "max": 60, "step": 1, "units": "px",
+        "description": "Bottom"
+    },
+    "margin-left": {
+        "type": "spinbutton", "default": 8, "min": 0, "max": 400, "step": 1, "units": "px",
+        "description": "Left"
+    },
+    "radius": {
+        "type": "spinbutton",
+        "default": 15,
+        "min": 0,
+        "max": 60,
+        "step": 1,
+        "units": "px",
+        "description": "Rounded corners",
+        "tooltip": "Half of the panel height or more gives fully rounded ends, like a pill."
+    },
+    "padding": {
+        "type": "spinbutton",
+        "default": 8,
+        "min": 0,
+        "max": 40,
+        "step": 1,
+        "units": "px",
+        "description": "Space between the edge of a pill and its applets"
+    },
+    "background": {
+        "type": "colorchooser",
+        "default": "rgb(30,30,36)",
+        "description": "Background colour"
+    },
+    "transparency": {
+        "type": "scale",
+        "default": 15,
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "description": "Transparency (%)",
+        "tooltip": "0 is solid, 100 is invisible."
+    }
+}
