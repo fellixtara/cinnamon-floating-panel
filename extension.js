@@ -42,10 +42,13 @@ const TINT_EFFECT = 'floating-panel-tint';
 //            keep their own colours.
 //  knockout: a light shape on a coloured tile (9Router): the tile takes the
 //            colour and the shape becomes a hole, like a symbolic icon.
+// `ta` dims the result: theme icons and texts are drawn with the panel's
+// text opacity already, pictures from apps are not, so they get it here.
 const SHADER_HEAD = 'uniform sampler2D tex;\n' +
     'uniform float tr;\n' +
     'uniform float tg;\n' +
     'uniform float tb;\n' +
+    'uniform float ta;\n' +
     'void main() {\n' +
     '    vec3 tint = vec3(tr, tg, tb);\n' +
     '    vec4 c = texture2D(tex, cogl_tex_coord_in[0].st);\n' +
@@ -60,31 +63,40 @@ const KEEP_BADGE = '    if (sat > 0.35 && hi > 0.3) {\n' +
     '    }\n';
 const SHADERS = {
     flat: SHADER_HEAD +
-        '    cogl_color_out = vec4(tint * c.a, c.a);\n}\n',
+        '    cogl_color_out = vec4(tint * c.a, c.a) * ta;\n}\n',
     badge: SHADER_HEAD + KEEP_BADGE +
-        '    cogl_color_out = vec4(tint * c.a, c.a);\n}\n',
+        '    cogl_color_out = vec4(tint * c.a, c.a) * ta;\n}\n',
     glyph: SHADER_HEAD + KEEP_BADGE +
         '    float k = c.a * smoothstep(0.2, 0.55, lum);\n' +
-        '    cogl_color_out = vec4(tint * k, k);\n}\n',
+        '    cogl_color_out = vec4(tint * k, k) * ta;\n}\n',
     knockout: SHADER_HEAD +
         '    float white = (1.0 - sat) * lum;\n' +
         '    float k = c.a * (1.0 - smoothstep(0.55, 0.85, white)) * smoothstep(0.1, 0.3, hi);\n' +
-        '    cogl_color_out = vec4(tint * k, k);\n}\n',
+        '    cogl_color_out = vec4(tint * k, k) * ta;\n}\n',
 };
 
 // One effect class per shader: Clutter compiles a class's shader once and
 // shares it between all its effects. A GType name can be registered only
 // once per Cinnamon session, so reloading the extension needs new names.
+// 1 as a float: whole numbers would reach the shaders as integers.
+const FULL = 1 - 1e-7;
+// The uniforms live in that shared shader, so effects with different
+// values must not share a class: theme icons and texts (`ta` 1) and
+// pictures (`ta` the text opacity) get a class each ("<mode>" and
+// "<mode>-picture").
 const TINT_CLASSES = {};
 const TYPE_SUFFIX = String(Date.now());
 for (let mode in SHADERS) {
-    let source = SHADERS[mode];
-    TINT_CLASSES[mode] = GObject.registerClass({ GTypeName: 'FloatingPanelTint_' + mode + '_' + TYPE_SUFFIX },
-        class extends Clutter.ShaderEffect {
-            vfunc_get_static_shader_source() {
-                return source;
-            }
-        });
+    for (let kind of ['', '-picture']) {
+        let source = SHADERS[mode];
+        TINT_CLASSES[mode + kind] = GObject.registerClass(
+            { GTypeName: 'FloatingPanelTint_' + mode + kind.replace('-', '_') + '_' + TYPE_SUFFIX },
+            class extends Clutter.ShaderEffect {
+                vfunc_get_static_shader_source() {
+                    return source;
+                }
+            });
+    }
 }
 
 let floating = null;
@@ -308,6 +320,40 @@ class FloatingPanel {
         return rgb.map(v => Math.max(0, Math.min(255, v || 0)) / 255 * 0.999999 + 1e-7);
     }
 
+    // A theme icon drawn with its own colours: not a symbolic icon (those
+    // are drawn in the text colour, opacity included).
+    _fullColourIcon(actor) {
+        if (!(actor instanceof St.Icon) || actor.get_icon_type() === St.IconType.SYMBOLIC)
+            return false;
+        let name = actor.icon_name;
+        if (!name && actor.gicon) {
+            try {
+                name = actor.gicon.to_string();
+            } catch (e) {
+            }
+        }
+        return !/-symbolic(\.svg)?$/.test(String(name || ''));
+    }
+
+    // 1 for symbolic icons and texts; for a picture or a full-colour icon,
+    // the opacity of the panel's
+    // text colour (the theme draws symbolic icons and texts with it).
+    _tintOpacity(actor) {
+        if (actor instanceof St.Widget && !this._fullColourIcon(actor))
+            return FULL;
+        for (let parent = actor.get_parent(); parent; parent = parent.get_parent()) {
+            if (parent instanceof St.Widget) {
+                try {
+                    let alpha = parent.get_theme_node().get_foreground_color().alpha;
+                    return Math.max(1, alpha) / 255 * 0.999999 + 1e-7;
+                } catch (e) {
+                    return FULL;
+                }
+            }
+        }
+        return FULL;
+    }
+
     // `reset`: the colour changed or the option was switched; `off`: removes
     // every effect (extension disabled). Applets add and replace icons at
     // any time, so the zone is checked again every two seconds while the
@@ -320,7 +366,8 @@ class FloatingPanel {
         for (let panel of this._panels()) {
             if (!panel._rightBox)
                 continue;
-            for (let [actor, mode] of this._tintTargets(panel._rightBox, [], files)) {
+            for (let [actor, shape] of this._tintTargets(panel._rightBox, [], files)) {
+                let mode = actor instanceof St.Widget && !this._fullColourIcon(actor) ? shape : shape + '-picture';
                 let effect = actor.get_effect(TINT_EFFECT);
                 if (effect && (!on || !(effect instanceof TINT_CLASSES[mode]))) {
                     actor.remove_effect(effect);
@@ -328,16 +375,19 @@ class FloatingPanel {
                 }
                 if (!on)
                     continue;
+                let opacity = this._tintOpacity(actor);
                 if (!effect) {
                     effect = new TINT_CLASSES[mode]();
                     effect.set_uniform_value('tex', 0);
                     actor.add_effect_with_name(TINT_EFFECT, effect);
-                } else if (!reset) {
+                } else if (!reset && effect._floatingOpacity === opacity) {
                     continue;
                 }
                 effect.set_uniform_value('tr', color[0]);
                 effect.set_uniform_value('tg', color[1]);
                 effect.set_uniform_value('tb', color[2]);
+                effect._floatingOpacity = opacity;
+                effect.set_uniform_value('ta', effect._floatingOpacity);
                 actor.queue_redraw();
             }
         }

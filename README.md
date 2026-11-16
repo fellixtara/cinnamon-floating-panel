@@ -72,7 +72,7 @@ Kalau on, setiap ikon dan teks di zona kanan (tray, sound, network, suhu, ...) m
 - Default: `9router.svg`, logo jaringan putih di atas kotak oranye.
 - Mode satu warna: `9router-symbolic.svg`, logo saja tanpa kotak, diwarnai dengan warna pilihan.
 
-Daftar penggantinya ada di `CUSTOM_ICONS` di `extension.js`. Ikon tray lain tidak diubah ke SVG. Aplikasi mengirim ulang gambar ikonnya setiap kali ada notifikasi, jadi salinan SVG akan ketinggalan. Pewarnaan dilakukan langsung pada gambar yang sedang tampil. Ikon aplikasi baru di panel kanan, atau ikon yang diganti aplikasinya, otomatis ikut diwarnai dalam 2 detik.
+Daftar penggantinya ada di `CUSTOM_ICONS` di `extension.js`. Ikon tray lain tidak diubah ke SVG. Aplikasi mengirim ulang gambar ikonnya setiap kali ada notifikasi, jadi salinan SVG akan ketinggalan. Pewarnaan dilakukan langsung pada gambar yang sedang tampil. Ikon aplikasi baru di panel kanan, atau ikon yang diganti aplikasinya, otomatis ikut diwarnai dalam 2 detik. Ikon gambar dan ikon berwarna penuh diberi opasitas yang sama dengan teks panel tema (Orchis-Dark: 70%), jadi kecerahannya sama dengan ikon simbolik seperti Bluetooth.
 
 **Appearance → Dropdown menus** (menu yang dibuka dari applet panel: sound, network, menu, ...)
 
