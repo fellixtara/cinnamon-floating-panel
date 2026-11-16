@@ -57,10 +57,18 @@ Lalu aktifkan seperti di atas.
 | Opsi | Default |
 |---|---|
 | Use these colours for the dropdown menus | on (off = warna tema) |
+| Also colour the menus of tray apps (Bluetooth, Slack, ...) | on |
 | Menu utama: background / transparency / teks | `rgb(33, 33, 33)` / 5 % / putih |
 | Submenu (bagian yang bisa dibuka-tutup, kartu pemutar musik): background / transparency / teks | `rgb(48, 48, 52)` / 0 % / `rgb(235, 235, 235)` |
 
 Opsi ini dibuat karena submenu tema Orchis-Dark berlatar terang dengan teks putih sehingga tidak terbaca.
+
+**Menu ikon tray.** Ikon seperti Bluetooth, Slack, dan Flameshot ditampilkan oleh applet `xapp-status`. Menunya adalah menu GTK yang digambar oleh aplikasinya sendiri, bukan oleh Cinnamon. Warnanya (memakai warna menu utama) ditulis ke blok bertanda di `~/.config/gtk-3.0/gtk.css`.
+
+- GTK hanya membaca file itu saat aplikasi mulai. Karena itu extension me-restart `xapp-sn-watcher` (layanan yang menggambar menu sebagian besar ikon tray) sekitar 1,5 detik setelah warna terakhir diubah. Ikon tray hilang sebentar lalu muncul lagi.
+- Aplikasi yang punya ikon sendiri (mintUpdate, mintreport) ikut berubah saat aplikasi tersebut dijalankan ulang.
+- Menu klik kanan aplikasi GTK 3 lain (misalnya Nemo) juga ikut warna ini.
+- Mematikan opsi ini atau menonaktifkan extension akan menghapus blok tersebut. Isi lain di `gtk.css` tidak disentuh.
 
 ## Cara kerja
 

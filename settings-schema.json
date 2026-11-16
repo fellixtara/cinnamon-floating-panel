@@ -64,7 +64,8 @@
                 "menu-custom",
                 "menu-background",
                 "menu-transparency",
-                "menu-text"
+                "menu-text",
+                "gtk-menus"
             ]
         },
         "sec-submenu": {
@@ -212,5 +213,12 @@
         "default": "rgb(235,235,235)",
         "dependency": "menu-custom",
         "description": "Text colour"
+    },
+    "gtk-menus": {
+        "type": "switch",
+        "default": true,
+        "dependency": "menu-custom",
+        "description": "Also colour the menus of tray apps (Bluetooth, Slack, ...)",
+        "tooltip": "Tray icons show their own GTK menus. Their colours go into ~/.config/gtk-3.0/gtk.css, so the right-click menus of other GTK 3 apps change too. Apps read that file when they start: the tray service is restarted, other apps change at their next start."
     }
 }

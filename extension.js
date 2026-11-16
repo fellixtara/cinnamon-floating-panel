@@ -2,6 +2,7 @@ const { Clutter, Gio, GLib, St } = imports.gi;
 const Main = imports.ui.main;
 const Panel = imports.ui.panel;
 const Settings = imports.ui.settings;
+const Util = imports.misc.util;
 
 const UUID = 'floating-panel@fellixtara';
 
@@ -10,6 +11,13 @@ const UUID = 'floating-panel@fellixtara';
 const BARE_PANEL = 'background-color: transparent; background-image: none; border-image: none; ' +
     'border-width: 0; box-shadow: none; border-radius: 0;';
 const ZONES = ['left', 'center', 'right'];
+
+const GTK_CSS = GLib.build_filenamev([GLib.get_user_config_dir(), 'gtk-3.0', 'gtk.css']);
+const GTK_START = '/* ' + UUID + ': start (written by the Floating Panel extension) */';
+const GTK_END = '/* ' + UUID + ': end */';
+const SN_WATCHER = '/usr/lib/x86_64-linux-gnu/xapps/xapp-sn-watcher';
+// -x: the process name only, so no other command line can match.
+const PGREP_WATCHER = ['pgrep', '-x', 'xapp-sn-watcher'];
 
 let floating = null;
 
@@ -24,13 +32,19 @@ class FloatingPanel {
             this.settings.bind(key, key.replace(/-/g, '_'), () => this._refresh(key.startsWith('margin')));
         for (let key of ['menu-custom', 'menu-background', 'menu-transparency', 'menu-text',
             'submenu-background', 'submenu-transparency', 'submenu-text'])
-            this.settings.bind(key, key.replace(/-/g, '_'), () => this._loadMenuStyle());
+            this.settings.bind(key, key.replace(/-/g, '_'), () => {
+                this._loadMenuStyle();
+                this._queueGtkMenus();
+            });
+        this.settings.bind('gtk-menus', 'gtk_menus', () => this._queueGtkMenus());
         // A new theme drops the stylesheets loaded into the old one.
         this._themeSetId = Main.themeManager.connect('theme-set', () => {
             this._menuStylesheet = null;
             this._loadMenuStyle();
         });
         this._loadMenuStyle();
+        if (this._writeGtkMenus(false))
+            this._restartTrayService();
 
         this._originals = {};
         let self = this;
@@ -155,6 +169,83 @@ class FloatingPanel {
         if (add)
             theme.load_stylesheet(add);
         context.set_theme(theme);
+    }
+
+    // Tray icons (xapp-status) show GTK menus drawn by the apps themselves,
+    // styled by a block in the user's gtk.css.
+    _gtkCss() {
+        let bg = this._rgba(this.menu_background, this.menu_transparency, 'rgb(33,33,33)');
+        let text = this._rgba(this.menu_text, 0, 'rgb(255,255,255)');
+        let dim = text.replace(/[\d.]+\)$/, '0.5)');
+        return GTK_START + '\n' +
+            'menu, .menu, .context-menu, window.popup menu, window.background.popup menu {\n' +
+            '  background-color: ' + bg + ';\n  color: ' + text + ';\n}\n' +
+            'menu menuitem, menu menuitem label, menu menuitem accelerator, menu menuitem arrow,\n' +
+            '.context-menu menuitem, .context-menu menuitem label,\n' +
+            'menu menuitem:not(:hover):not(:selected), menu menuitem:not(:hover):not(:selected) label,\n' +
+            '.context-menu menuitem:not(:hover):not(:selected), .context-menu menuitem:not(:hover):not(:selected) label {\n' +
+            '  color: ' + text + ';\n}\n' +
+            'menu menuitem:disabled, menu menuitem:disabled label {\n  color: ' + dim + ';\n}\n' +
+            GTK_END + '\n';
+    }
+
+    // Writes (or removes) the block; returns whether the file changed.
+    _writeGtkMenus(remove) {
+        let file = Gio.File.new_for_path(GTK_CSS);
+        let old = '';
+        try {
+            let [, contents] = file.load_contents(null);
+            old = imports.byteArray.toString(contents);
+        } catch (e) {
+        }
+        let start = old.indexOf(GTK_START), end = old.indexOf(GTK_END);
+        let rest = start >= 0 && end > start
+            ? old.slice(0, start) + old.slice(end + GTK_END.length).replace(/^\n/, '') : old;
+        let text = !remove && this.menu_custom && this.gtk_menus
+            ? (rest && !rest.endsWith('\n') ? rest + '\n' : rest) + this._gtkCss() : rest;
+        if (text === old)
+            return false;
+        try {
+            if (!text.trim() && old.trim() === old.slice(start, end + GTK_END.length).trim()) {
+                file.delete(null);
+            } else {
+                GLib.mkdir_with_parents(GLib.path_get_dirname(GTK_CSS), 0o755);
+                file.replace_contents(text, null, false, Gio.FileCreateFlags.NONE, null);
+            }
+        } catch (e) {
+            global.logError(UUID + ': could not write ' + GTK_CSS + ': ' + e);
+            return false;
+        }
+        return true;
+    }
+
+    // GTK reads gtk.css when an app starts: the tray service, which draws
+    // the menus of most tray icons, is restarted (the icons come back on
+    // their own). Waits for the settings to stop changing first.
+    _queueGtkMenus() {
+        if (this._gtkTimeout)
+            GLib.source_remove(this._gtkTimeout);
+        this._gtkTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
+            this._gtkTimeout = 0;
+            if (this._writeGtkMenus(false))
+                this._restartTrayService();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _restartTrayService() {
+        Util.spawnCommandLineAsyncIO('', (stdout) => {
+            for (let pid of stdout.split(/\s+/).filter(pid => /^\d+$/.test(pid)))
+                Util.spawn(['kill', pid]);
+            // Usually started again by D-Bus as soon as an app asks for it.
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+                Util.spawnCommandLineAsyncIO('', (out) => {
+                    if (!out.trim())
+                        Util.spawn([SN_WATCHER]);
+                }, { argv: PGREP_WATCHER });
+                return GLib.SOURCE_REMOVE;
+            });
+        }, { argv: PGREP_WATCHER });
     }
 
     _unloadMenuStyle() {
@@ -312,6 +403,11 @@ class FloatingPanel {
             panel.actor.queue_relayout();
         }
         Main.themeManager.disconnect(this._themeSetId);
+        if (this._gtkTimeout)
+            GLib.source_remove(this._gtkTimeout);
+        // Turning the extension off keeps the tray menus' colours until the
+        // next login instead of restarting the tray service.
+        this._writeGtkMenus(true);
         this._unloadMenuStyle();
         this.settings.finalize();
     }
