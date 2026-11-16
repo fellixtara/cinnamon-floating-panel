@@ -52,12 +52,23 @@ Lalu aktifkan seperti di atas.
 | Background colour | `rgb(30, 30, 36)` |
 | Transparency | 15 % (0 = solid, 100 = tak terlihat) |
 
+**Appearance → Dropdown menus** (menu yang dibuka dari applet panel: sound, network, menu, ...)
+
+| Opsi | Default |
+|---|---|
+| Use these colours for the dropdown menus | on (off = warna tema) |
+| Menu utama: background / transparency / teks | `rgb(33, 33, 33)` / 5 % / putih |
+| Submenu (bagian yang bisa dibuka-tutup, kartu pemutar musik): background / transparency / teks | `rgb(48, 48, 52)` / 0 % / `rgb(235, 235, 235)` |
+
+Opsi ini dibuat karena submenu tema Orchis-Dark berlatar terang dengan teks putih sehingga tidak terbaca.
+
 ## Cara kerja
 
 - Panel tetap menempel ke tepi layar, dan margin adalah ruang kosong di dalamnya. Jadi jendela yang di-maximize tidak menutupi panel.
 - Tinggi panel di *System Settings → Panel* menjadi tinggi pill. Margin atas/bawah ditambahkan di luarnya, sehingga ukuran ikon applet tidak berubah.
 - Di mode Separate, tiap pill selebar isinya. Zona tanpa applet disembunyikan. *Gap* adalah jarak minimum antar pill, terlihat saat zona saling mendekat.
 - Panel vertikal tidak diubah.
+- Warna menu diterapkan lewat stylesheet yang dibuat di `$XDG_RUNTIME_DIR/floating-panel@fellixtara/`. Setiap perubahan memuat ulang tema Cinnamon (tanpa logout) supaya menu yang sudah ada ikut berubah.
 - Menonaktifkan extension mengembalikan tampilan panel dari tema.
 
 ## Pengembangan

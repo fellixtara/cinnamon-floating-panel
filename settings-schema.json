@@ -1,36 +1,80 @@
 {
     "layout": {
         "type": "layout",
-        "pages": ["page-general", "page-appearance"],
+        "pages": [
+            "page-general",
+            "page-appearance"
+        ],
         "page-general": {
             "type": "page",
             "title": "General panel options",
-            "sections": ["sec-split", "sec-margins", "sec-shape"]
+            "sections": [
+                "sec-split",
+                "sec-margins",
+                "sec-shape"
+            ]
         },
         "page-appearance": {
             "type": "page",
             "title": "Appearance",
-            "sections": ["sec-colour"]
+            "sections": [
+                "sec-colour",
+                "sec-menu",
+                "sec-submenu"
+            ]
         },
         "sec-split": {
             "type": "section",
             "title": "Zones",
-            "keys": ["separate", "gap"]
+            "keys": [
+                "separate",
+                "gap"
+            ]
         },
         "sec-margins": {
             "type": "section",
             "title": "Margin (space between the panel and the screen edges)",
-            "keys": ["margin-top", "margin-right", "margin-bottom", "margin-left"]
+            "keys": [
+                "margin-top",
+                "margin-right",
+                "margin-bottom",
+                "margin-left"
+            ]
         },
         "sec-shape": {
             "type": "section",
             "title": "Shape",
-            "keys": ["radius", "padding"]
+            "keys": [
+                "radius",
+                "padding"
+            ]
         },
         "sec-colour": {
             "type": "section",
-            "title": "Background",
-            "keys": ["background", "transparency"]
+            "title": "Panel background",
+            "keys": [
+                "background",
+                "transparency"
+            ]
+        },
+        "sec-menu": {
+            "type": "section",
+            "title": "Dropdown menus (main)",
+            "keys": [
+                "menu-custom",
+                "menu-background",
+                "menu-transparency",
+                "menu-text"
+            ]
+        },
+        "sec-submenu": {
+            "type": "section",
+            "title": "Dropdown menus (secondary / submenu)",
+            "keys": [
+                "submenu-background",
+                "submenu-transparency",
+                "submenu-text"
+            ]
         }
     },
     "separate": {
@@ -51,19 +95,39 @@
         "tooltip": "The smallest space kept between two pills when the zones grow towards each other."
     },
     "margin-top": {
-        "type": "spinbutton", "default": 4, "min": 0, "max": 60, "step": 1, "units": "px",
+        "type": "spinbutton",
+        "default": 4,
+        "min": 0,
+        "max": 60,
+        "step": 1,
+        "units": "px",
         "description": "Top"
     },
     "margin-right": {
-        "type": "spinbutton", "default": 8, "min": 0, "max": 400, "step": 1, "units": "px",
+        "type": "spinbutton",
+        "default": 8,
+        "min": 0,
+        "max": 400,
+        "step": 1,
+        "units": "px",
         "description": "Right"
     },
     "margin-bottom": {
-        "type": "spinbutton", "default": 4, "min": 0, "max": 60, "step": 1, "units": "px",
+        "type": "spinbutton",
+        "default": 4,
+        "min": 0,
+        "max": 60,
+        "step": 1,
+        "units": "px",
         "description": "Bottom"
     },
     "margin-left": {
-        "type": "spinbutton", "default": 8, "min": 0, "max": 400, "step": 1, "units": "px",
+        "type": "spinbutton",
+        "default": 8,
+        "min": 0,
+        "max": 400,
+        "step": 1,
+        "units": "px",
         "description": "Left"
     },
     "radius": {
@@ -98,5 +162,55 @@
         "step": 1,
         "description": "Transparency (%)",
         "tooltip": "0 is solid, 100 is invisible."
+    },
+    "menu-custom": {
+        "type": "switch",
+        "default": true,
+        "description": "Use these colours for the dropdown menus",
+        "tooltip": "Applies to the menus opened from the panel applets (sound, network, menu, ...) and to their expandable sections. Off keeps the theme's colours."
+    },
+    "menu-background": {
+        "type": "colorchooser",
+        "default": "rgb(33,33,33)",
+        "dependency": "menu-custom",
+        "description": "Background colour"
+    },
+    "menu-transparency": {
+        "type": "scale",
+        "default": 5,
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "dependency": "menu-custom",
+        "description": "Transparency (%)",
+        "tooltip": "0 is solid, 100 is invisible."
+    },
+    "menu-text": {
+        "type": "colorchooser",
+        "default": "rgb(255,255,255)",
+        "dependency": "menu-custom",
+        "description": "Text colour"
+    },
+    "submenu-background": {
+        "type": "colorchooser",
+        "default": "rgb(48,48,52)",
+        "dependency": "menu-custom",
+        "description": "Background colour"
+    },
+    "submenu-transparency": {
+        "type": "scale",
+        "default": 0,
+        "min": 0,
+        "max": 100,
+        "step": 1,
+        "dependency": "menu-custom",
+        "description": "Transparency (%)",
+        "tooltip": "0 is solid, 100 is invisible."
+    },
+    "submenu-text": {
+        "type": "colorchooser",
+        "default": "rgb(235,235,235)",
+        "dependency": "menu-custom",
+        "description": "Text colour"
     }
 }

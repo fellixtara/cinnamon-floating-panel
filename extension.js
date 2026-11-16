@@ -1,4 +1,4 @@
-const { Clutter, St } = imports.gi;
+const { Clutter, Gio, GLib, St } = imports.gi;
 const Main = imports.ui.main;
 const Panel = imports.ui.panel;
 const Settings = imports.ui.settings;
@@ -22,6 +22,15 @@ class FloatingPanel {
         for (let key of ['separate', 'gap', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
             'radius', 'padding', 'background', 'transparency'])
             this.settings.bind(key, key.replace(/-/g, '_'), () => this._refresh(key.startsWith('margin')));
+        for (let key of ['menu-custom', 'menu-background', 'menu-transparency', 'menu-text',
+            'submenu-background', 'submenu-transparency', 'submenu-text'])
+            this.settings.bind(key, key.replace(/-/g, '_'), () => this._loadMenuStyle());
+        // A new theme drops the stylesheets loaded into the old one.
+        this._themeSetId = Main.themeManager.connect('theme-set', () => {
+            this._menuStylesheet = null;
+            this._loadMenuStyle();
+        });
+        this._loadMenuStyle();
 
         this._originals = {};
         let self = this;
@@ -91,15 +100,93 @@ class FloatingPanel {
         }
     }
 
-    _pillStyle() {
-        let color = String(this.background || 'rgb(30,30,36)');
-        let match = color.match(/rgba?\(([^)]+)\)/);
-        let [r, g, b, a] = match ? match[1].split(',').map(Number) : [30, 30, 36, 1];
+    // A colour setting as rgba(), made more transparent by `transparency` %.
+    _rgba(color, transparency, fallback) {
+        let match = String(color || fallback).match(/rgba?\(([^)]+)\)/) || fallback.match(/rgba?\(([^)]+)\)/);
+        let [r, g, b, a] = match[1].split(',').map(Number);
         if (isNaN(a))
             a = 1;
-        let alpha = a * (1 - Math.max(0, Math.min(100, Number(this.transparency) || 0)) / 100);
-        return 'background-color: rgba(' + [r, g, b, alpha.toFixed(3)].join(', ') + '); border-radius: ' +
-            Math.round((Number(this.radius) || 0) * global.ui_scale) + 'px;';
+        let alpha = a * (1 - Math.max(0, Math.min(100, Number(transparency) || 0)) / 100);
+        return 'rgba(' + [r, g, b, alpha.toFixed(3)].join(', ') + ')';
+    }
+
+    _pillStyle() {
+        return 'background-color: ' + this._rgba(this.background, this.transparency, 'rgb(30,30,36)') +
+            '; border-radius: ' + Math.round((Number(this.radius) || 0) * global.ui_scale) + 'px;';
+    }
+
+    // The menus are styled by a generated stylesheet laid over the theme's.
+    _menuCss() {
+        // Each class twice: these rules are then more specific than the
+        // theme's.
+        let menus = ['.menu.menu', '.popup-menu.popup-menu', '.popup-combo-menu.popup-combo-menu'];
+        let sub = menus.map(m => m + ' .popup-sub-menu.popup-sub-menu');
+        let all = (list, suffix) => list.map(m => m + suffix).join(',\n');
+        let bg = this._rgba(this.menu_background, this.menu_transparency, 'rgb(33,33,33)');
+        let text = this._rgba(this.menu_text, 0, 'rgb(255,255,255)');
+        let subBg = this._rgba(this.submenu_background, this.submenu_transparency, 'rgb(48,48,52)');
+        let subText = this._rgba(this.submenu_text, 0, 'rgb(235,235,235)');
+        return all(menus, '') + ' {\n  background-color: ' + bg + ';\n  color: ' + text + ';\n}\n' +
+            all(menus, ' .popup-menu-item') + ' {\n  color: ' + text + ';\n}\n' +
+            all(sub, '') + ' {\n  background-color: ' + subBg + ';\n  color: ' + subText + ';\n}\n' +
+            all(sub, ' .popup-menu-item') + ',\n' + all(sub, ' .popup-menu-item:hover') + ',\n' +
+            all(sub, ' .popup-menu-item:active') + ' {\n  color: ' + subText + ';\n}\n' +
+            all(sub, ' .popup-menu-item:hover') + ',\n' + all(sub, ' .popup-menu-item:active') +
+            ' {\n  background-color: rgba(255, 255, 255, 0.1);\n}\n' +
+            // The music player card of the sound applet.
+            '.sound-player.sound-player {\n  background-color: ' + subBg + ';\n  color: ' + subText + ';\n}\n' +
+            '.sound-player.sound-player > StBoxLayout:first-child StButton:small:hover {\n' +
+            '  background-color: rgba(255, 255, 255, 0.12);\n}\n';
+    }
+
+    // Menus that already exist keep their old style when a stylesheet is
+    // only added to the theme: the stylesheets go into a new theme, which
+    // restyles everything.
+    _swapStylesheet(remove, add) {
+        let context = St.ThemeContext.get_for_stage(global.stage);
+        let old = context.get_theme();
+        let fallback = old.fallback_stylesheet;
+        let theme = new St.Theme({ fallback_stylesheet: fallback && fallback.get_path ? fallback.get_path() : fallback });
+        for (let sheet of old.get_custom_stylesheets()) {
+            let path = sheet.get_path ? sheet.get_path() : String(sheet);
+            if (path !== remove && path !== add)
+                theme.load_stylesheet(path);
+        }
+        if (add)
+            theme.load_stylesheet(add);
+        context.set_theme(theme);
+    }
+
+    _unloadMenuStyle() {
+        if (!this._menuStylesheet)
+            return;
+        try {
+            this._swapStylesheet(this._menuStylesheet.get_path(), null);
+        } catch (e) {
+        }
+        try {
+            this._menuStylesheet.delete(null);
+        } catch (e) {
+        }
+        this._menuStylesheet = null;
+    }
+
+    _loadMenuStyle() {
+        this._unloadMenuStyle();
+        if (!this.menu_custom)
+            return;
+        // A new file each time: the theme caches stylesheets by file.
+        let dir = GLib.build_filenamev([GLib.get_user_runtime_dir(), UUID]);
+        GLib.mkdir_with_parents(dir, 0o700);
+        this._menuCount = (this._menuCount || 0) + 1;
+        let file = Gio.File.new_for_path(GLib.build_filenamev([dir, 'menus-' + this._menuCount + '.css']));
+        try {
+            file.replace_contents(this._menuCss(), null, false, Gio.FileCreateFlags.NONE, null);
+            this._swapStylesheet(null, file.get_path());
+            this._menuStylesheet = file;
+        } catch (e) {
+            global.logError(UUID + ': could not load the menu colours: ' + e);
+        }
     }
 
     // The pills of a panel, created the first time: one for the whole panel
@@ -224,6 +311,8 @@ class FloatingPanel {
             panel._setPanelHeight();
             panel.actor.queue_relayout();
         }
+        Main.themeManager.disconnect(this._themeSetId);
+        this._unloadMenuStyle();
         this.settings.finalize();
     }
 }
