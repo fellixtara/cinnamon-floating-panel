@@ -6,13 +6,21 @@ Dibuat untuk Linux Mint 22.3 (Cinnamon 6.6, X11). Cocok dipakai bersama [Cinnamo
 
 ## Screenshot
 
+**Separate on**: zona kiri dan kanan menjadi pill sendiri. Zona tengah yang kosong tidak digambar, sehingga [Cinnamon Island](https://github.com/fellixtara/cinnamon-island-custom) tampil di tengah.
+
+![Separate](screenshots/separate.png)
+
 **Satu panel** (Separate off)
 
 ![Satu panel](screenshots/single.png)
 
-**Separate on**: zona kiri dan kanan jadi pill sendiri, zona tengah yang kosong tidak digambar
+**Ikon panel kanan** (diperbesar 2×)
 
-![Separate](screenshots/separate.png)
+| | |
+|---|---|
+| Default: setiap app memakai warnanya sendiri, 9Router memakai ikon SVG dari extension | ![Default](screenshots/icons-default.png) |
+| Satu warna (putih): ikon gambar dibaca per bentuk, 9Router hanya logonya | ![Satu warna](screenshots/icons-one-colour.png) |
+| Satu warna (biru) | ![Biru](screenshots/icons-blue.png) |
 
 ## Pasang
 
