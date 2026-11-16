@@ -25,6 +25,8 @@ const TRAY_APPS = [
     { name: 'mintreport-tray', command: ['/usr/lib/linuxmint/mintreport/tray.py'] },
 ];
 
+const TINT_EFFECT = 'floating-panel-tint';
+
 let floating = null;
 
 // Floating panels: the panel actor still spans the screen edge (so windows
@@ -43,6 +45,8 @@ class FloatingPanel {
                 this._queueGtkMenus();
             });
         this.settings.bind('gtk-menus', 'gtk_menus', () => this._queueGtkMenus());
+        this.settings.bind('icon-tint', 'icon_tint', () => this._tintIcons(true));
+        this.settings.bind('icon-color', 'icon_color', () => this._tintIcons(true));
         // A new theme drops the stylesheets loaded into the old one.
         this._themeSetId = Main.themeManager.connect('theme-set', () => {
             this._menuStylesheet = null;
@@ -82,6 +86,65 @@ class FloatingPanel {
         this._allocateOriginal = proto._allocate;
 
         this._refresh(true);
+        this._tintIcons(true);
+    }
+
+    // The fragment shader that draws an icon as a flat shape of one colour.
+    _tintSource() {
+        let match = String(this.icon_color || '').match(/rgba?\(([^)]+)\)/);
+        let [r, g, b] = match ? match[1].split(',').map(Number) : [255, 255, 255];
+        let rgb = [r, g, b].map(v => (Math.max(0, Math.min(255, v || 0)) / 255).toFixed(4)).join(', ');
+        return 'uniform sampler2D tex;\n' +
+            'void main() {\n' +
+            '    vec4 c = texture2D(tex, cogl_tex_coord_in[0].st);\n' +
+            '    cogl_color_out = vec4(vec3(' + rgb + ') * c.a, c.a);\n' +
+            '}\n';
+    }
+
+    // Icons, texts and pictures (tray icons sent as pixmaps) of the
+    // applets in the right zone of each panel.
+    _tintTargets(actor, list) {
+        if (actor instanceof St.Icon || actor instanceof St.Label ||
+            (actor.constructor === Clutter.Actor && actor.get_content())) {
+            list.push(actor);
+            return list;
+        }
+        for (let child of actor.get_children())
+            this._tintTargets(child, list);
+        return list;
+    }
+
+    // `reset`: the colour changed or the option was switched, so existing
+    // effects are replaced; `off`: removes them all (extension disabled). Applets add and replace icons at any time, so
+    // the zone is checked again every two seconds while the option is on.
+    _tintIcons(reset, off = false) {
+        let source = this.icon_tint && !off ? this._tintSource() : null;
+        for (let panel of this._panels()) {
+            if (!panel._rightBox)
+                continue;
+            for (let actor of this._tintTargets(panel._rightBox, [])) {
+                let effect = actor.get_effect(TINT_EFFECT);
+                if (effect && (reset || !source)) {
+                    actor.remove_effect(effect);
+                    effect = null;
+                }
+                if (source && !effect) {
+                    effect = new Clutter.ShaderEffect({ shader_type: Clutter.ShaderType.FRAGMENT_SHADER });
+                    effect.set_shader_source(source);
+                    effect.set_uniform_value('tex', 0);
+                    actor.add_effect_with_name(TINT_EFFECT, effect);
+                }
+            }
+        }
+        if (source && !this._tintTimeout) {
+            this._tintTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+                this._tintIcons(false);
+                return GLib.SOURCE_CONTINUE;
+            });
+        } else if (!source && this._tintTimeout) {
+            GLib.source_remove(this._tintTimeout);
+            this._tintTimeout = 0;
+        }
     }
 
     _patch(proto, name, wrapper) {
@@ -434,6 +497,7 @@ class FloatingPanel {
             panel.actor.queue_relayout();
         }
         Main.themeManager.disconnect(this._themeSetId);
+        this._tintIcons(true, true);
         if (this._gtkTimeout)
             GLib.source_remove(this._gtkTimeout);
         // Turning the extension off keeps the tray menus' colours until the

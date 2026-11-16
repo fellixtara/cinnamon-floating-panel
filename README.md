@@ -52,6 +52,15 @@ Lalu aktifkan seperti di atas.
 | Background colour | `rgb(30, 30, 36)` |
 | Transparency | 15 % (0 = solid, 100 = tak terlihat) |
 
+**Appearance → Right panel icons**
+
+| Opsi | Default |
+|---|---|
+| Give all icons in the right zone one colour | off (setiap app memakai warnanya sendiri) |
+| Icon colour | putih |
+
+Kalau on, setiap ikon dan teks di zona kanan (tray, sound, network, suhu, ...) digambar sebagai bentuk polos satu warna, termasuk ikon berwarna seperti Slack. Detail di dalam ikon berwarna, misalnya angka di ikon kotak, ikut tertutup warna. Ikon yang ditambahkan atau diganti applet ikut diwarnai dalam 2 detik.
+
 **Appearance → Dropdown menus** (menu yang dibuka dari applet panel: sound, network, menu, ...)
 
 | Opsi | Default |

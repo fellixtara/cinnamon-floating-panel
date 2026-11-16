@@ -19,6 +19,7 @@
             "title": "Appearance",
             "sections": [
                 "sec-colour",
+                "sec-icons",
                 "sec-menu",
                 "sec-submenu"
             ]
@@ -75,6 +76,14 @@
                 "submenu-background",
                 "submenu-transparency",
                 "submenu-text"
+            ]
+        },
+        "sec-icons": {
+            "type": "section",
+            "title": "Right panel icons",
+            "keys": [
+                "icon-tint",
+                "icon-color"
             ]
         }
     },
@@ -220,5 +229,17 @@
         "dependency": "menu-custom",
         "description": "Also colour the menus of tray apps (Bluetooth, Slack, ...)",
         "tooltip": "Tray icons show their own GTK menus. Their colours go into ~/.config/gtk-3.0/gtk.css, so the right-click menus of other GTK 3 apps change too. Apps read that file when they start: the tray service is restarted, other apps change at their next start."
+    },
+    "icon-tint": {
+        "type": "switch",
+        "default": false,
+        "description": "Give all icons in the right zone one colour",
+        "tooltip": "On: every icon and text in the right zone (tray, sound, network, ...) is drawn in the colour below, as a flat shape. Off: each app keeps its own colours."
+    },
+    "icon-color": {
+        "type": "colorchooser",
+        "default": "rgb(255,255,255)",
+        "dependency": "icon-tint",
+        "description": "Icon colour"
     }
 }
