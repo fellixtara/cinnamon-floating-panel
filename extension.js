@@ -151,43 +151,59 @@ class FloatingPanel {
     }
 
     // The fragment shader that draws an icon as a flat shape of one colour.
-    // How to recolour a picture icon, from its pixels: mostly coloured
-    // means a tile (knockout), otherwise a shape (glyph). Cached per file;
-    // apps write a new file whenever their icon changes.
+    // How to recolour a picture icon, from its pixels:
+    //  mostly coloured           -> a tile (knockout),
+    //  mostly dark (apart from coloured dots) -> a dark shape meant for
+    //                                light panels, its holes being the
+    //                                details; dots keep their colours (badge),
+    //  otherwise                  -> a light shape, maybe outlined (glyph).
+    // Cached per file and version: apps write a new file whenever their
+    // icon changes, and the tray reuses file names for other apps.
     _pictureMode(path) {
+        let key = path;
+        try {
+            let info = Gio.File.new_for_path(path).query_info('time::modified,time::modified-usec,standard::size',
+                Gio.FileQueryInfoFlags.NONE, null);
+            key += ':' + info.get_attribute_uint64('time::modified') + '.' +
+                info.get_attribute_uint32('time::modified-usec') + ':' + info.get_size();
+        } catch (e) {
+        }
         this._modeCache = this._modeCache || new Map();
-        if (this._modeCache.has(path))
-            return this._modeCache.get(path);
+        if (this._modeCache.has(key))
+            return this._modeCache.get(key);
         let mode = 'glyph';
         try {
             let pixbuf = GdkPixbuf.Pixbuf.new_from_file(path);
             if (pixbuf.get_has_alpha() && pixbuf.get_n_channels() === 4) {
                 let pixels = pixbuf.get_pixels(), stride = pixbuf.get_rowstride();
-                let solid = 0, coloured = 0;
+                let solid = 0, coloured = 0, dark = 0;
                 for (let y = 0; y < pixbuf.get_height(); y++) {
                     for (let x = 0; x < pixbuf.get_width(); x++) {
                         let o = y * stride + x * 4;
                         if (pixels[o + 3] < 128)
                             continue;
                         solid++;
-                        let hi = Math.max(pixels[o], pixels[o + 1], pixels[o + 2]);
-                        let lo = Math.min(pixels[o], pixels[o + 1], pixels[o + 2]);
+                        let r = pixels[o], g = pixels[o + 1], b = pixels[o + 2];
+                        let hi = Math.max(r, g, b), lo = Math.min(r, g, b);
                         if (hi > 76 && (hi - lo) / hi > 0.4)
                             coloured++;
+                        else if (0.299 * r + 0.587 * g + 0.114 * b < 90)
+                            dark++;
                     }
                 }
                 if (solid && coloured / solid > 0.5)
                     mode = 'knockout';
+                else if (solid > coloured && dark / (solid - coloured) > 0.85)
+                    mode = 'badge';
             }
         } catch (e) {
         }
         if (this._modeCache.size > 50)
             this._modeCache.clear();
-        this._modeCache.set(path, mode);
+        this._modeCache.set(key, mode);
         return mode;
     }
 
-    // The tray icons sent as pictures: their actor and the picture's file.
     // The tray icons of xapp-status (one object per icon).
     _statusIcons() {
         let icons = [];
