@@ -18,6 +18,12 @@ const GTK_END = '/* ' + UUID + ': end */';
 const SN_WATCHER = '/usr/lib/x86_64-linux-gnu/xapps/xapp-sn-watcher';
 // -x: the process name only, so no other command line can match.
 const PGREP_WATCHER = ['pgrep', '-x', 'xapp-sn-watcher'];
+// Tray apps with their own GTK menu (not drawn by xapp-sn-watcher): process
+// name and the command that starts them again in the tray.
+const TRAY_APPS = [
+    { name: 'mintUpdate', command: ['/usr/lib/linuxmint/mintUpdate/mintUpdate.py'] },
+    { name: 'mintreport-tray', command: ['/usr/lib/linuxmint/mintreport/tray.py'] },
+];
 
 let floating = null;
 
@@ -140,9 +146,9 @@ class FloatingPanel {
         let text = this._rgba(this.menu_text, 0, 'rgb(255,255,255)');
         let subBg = this._rgba(this.submenu_background, this.submenu_transparency, 'rgb(48,48,52)');
         let subText = this._rgba(this.submenu_text, 0, 'rgb(235,235,235)');
-        return all(menus, '') + ' {\n  background-color: ' + bg + ';\n  color: ' + text + ';\n}\n' +
+        return all(menus, '') + ' {\n  background-color: ' + bg + ';\n  color: ' + text + ';\n  border: none;\n}\n' +
             all(menus, ' .popup-menu-item') + ' {\n  color: ' + text + ';\n}\n' +
-            all(sub, '') + ' {\n  background-color: ' + subBg + ';\n  color: ' + subText + ';\n}\n' +
+            all(sub, '') + ' {\n  background-color: ' + subBg + ';\n  color: ' + subText + ';\n  border: none;\n}\n' +
             all(sub, ' .popup-menu-item') + ',\n' + all(sub, ' .popup-menu-item:hover') + ',\n' +
             all(sub, ' .popup-menu-item:active') + ' {\n  color: ' + subText + ';\n}\n' +
             all(sub, ' .popup-menu-item:hover') + ',\n' + all(sub, ' .popup-menu-item:active') +
@@ -178,8 +184,11 @@ class FloatingPanel {
         let text = this._rgba(this.menu_text, 0, 'rgb(255,255,255)');
         let dim = text.replace(/[\d.]+\)$/, '0.5)');
         return GTK_START + '\n' +
-            'menu, .menu, .context-menu, window.popup menu, window.background.popup menu {\n' +
-            '  background-color: ' + bg + ';\n  color: ' + text + ';\n}\n' +
+            'menu, .menu, .context-menu, window.popup menu, window.background.popup menu,\n' +
+            '.csd menu, .csd .menu, .csd .context-menu, combobox menu, combobox window.popup menu {\n' +
+            '  background-color: ' + bg + ';\n  color: ' + text + ';\n  border: none;\n}\n' +
+            '.csd.popup decoration, window.popup decoration, window.background.popup decoration, .popup decoration {\n' +
+            '  border: none;\n}\n' +
             'menu menuitem, menu menuitem label, menu menuitem accelerator, menu menuitem arrow,\n' +
             '.context-menu menuitem, .context-menu menuitem label,\n' +
             'menu menuitem:not(:hover):not(:selected), menu menuitem:not(:hover):not(:selected) label,\n' +
@@ -246,6 +255,28 @@ class FloatingPanel {
                 return GLib.SOURCE_REMOVE;
             });
         }, { argv: PGREP_WATCHER });
+        for (let app of TRAY_APPS)
+            this._restartTrayApp(app);
+    }
+
+    // Tray apps that draw their own menu. One that is busy (it has child
+    // processes, e.g. an update running) is left alone.
+    _restartTrayApp(app) {
+        Util.spawnCommandLineAsyncIO('', (stdout) => {
+            let pids = stdout.split(/\s+/).filter(pid => /^\d+$/.test(pid));
+            if (!pids.length)
+                return;
+            Util.spawnCommandLineAsyncIO('', (children) => {
+                if (children.trim())
+                    return;
+                for (let pid of pids)
+                    Util.spawn(['kill', pid]);
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+                    Util.spawn(app.command);
+                    return GLib.SOURCE_REMOVE;
+                });
+            }, { argv: ['pgrep', '-P', pids.join(',')] });
+        }, { argv: ['pgrep', '-x', app.name] });
     }
 
     _unloadMenuStyle() {

@@ -66,7 +66,8 @@ Opsi ini dibuat karena submenu tema Orchis-Dark berlatar terang dengan teks puti
 **Menu ikon tray.** Ikon seperti Bluetooth, Slack, dan Flameshot ditampilkan oleh applet `xapp-status`. Menunya adalah menu GTK yang digambar oleh aplikasinya sendiri, bukan oleh Cinnamon. Warnanya (memakai warna menu utama) ditulis ke blok bertanda di `~/.config/gtk-3.0/gtk.css`.
 
 - GTK hanya membaca file itu saat aplikasi mulai. Karena itu extension me-restart `xapp-sn-watcher` (layanan yang menggambar menu sebagian besar ikon tray) sekitar 1,5 detik setelah warna terakhir diubah. Ikon tray hilang sebentar lalu muncul lagi.
-- Aplikasi yang punya ikon sendiri (mintUpdate, mintreport) ikut berubah saat aplikasi tersebut dijalankan ulang.
+- Update Manager (mintUpdate) dan System Reports (mintreport) menggambar menunya sendiri, jadi keduanya ikut di-restart ke tray. Kalau sedang sibuk (misalnya update berjalan), aplikasi itu dilewati dan baru berubah saat dijalankan ulang.
+- Border menu dihapus, baik di menu Cinnamon maupun di menu GTK.
 - Menu klik kanan aplikasi GTK 3 lain (misalnya Nemo) juga ikut warna ini.
 - Mematikan opsi ini atau menonaktifkan extension akan menghapus blok tersebut. Isi lain di `gtk.css` tidak disentuh.
 
