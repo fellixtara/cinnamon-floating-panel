@@ -56,6 +56,7 @@ Lalu aktifkan seperti di atas.
 
 | Opsi | Default |
 |---|---|
+| Use the extension's own icons for some tray apps (9Router) | on |
 | Give all icons in the right zone one colour | off (setiap app memakai warnanya sendiri) |
 | Icon colour | putih |
 
@@ -65,7 +66,12 @@ Kalau on, setiap ikon dan teks di zona kanan (tray, sound, network, suhu, ...) m
 - **Kotak berwarna dengan simbol terang** (misalnya 9Router): kotaknya diwarnai dan simbolnya jadi lubang, seperti ikon simbolik.
 - **Titik notifikasi berwarna** (merah, biru, ...) tetap memakai warna aslinya.
 
-Ikon tray tidak diubah ke SVG. Aplikasi mengirim ulang gambar ikonnya setiap kali ada notifikasi, jadi salinan SVG akan ketinggalan. Pewarnaan dilakukan langsung pada gambar yang sedang tampil. Ikon yang ditambahkan atau diganti ikut diwarnai dalam 2 detik.
+**Ikon pengganti.** 9Router (nama ikon tray `tray_linux_release`) diganti dengan SVG milik extension di `icons/`:
+
+- Default: `9router.svg`, logo jaringan putih di atas kotak oranye.
+- Mode satu warna: `9router-symbolic.svg`, logo saja tanpa kotak, diwarnai dengan warna pilihan.
+
+Daftar penggantinya ada di `CUSTOM_ICONS` di `extension.js`. Ikon tray lain tidak diubah ke SVG. Aplikasi mengirim ulang gambar ikonnya setiap kali ada notifikasi, jadi salinan SVG akan ketinggalan. Pewarnaan dilakukan langsung pada gambar yang sedang tampil. Ikon yang ditambahkan atau diganti ikut diwarnai dalam 2 detik.
 
 **Appearance → Dropdown menus** (menu yang dibuka dari applet panel: sound, network, menu, ...)
 

@@ -82,6 +82,7 @@
             "type": "section",
             "title": "Right panel icons",
             "keys": [
+                "custom-icons",
                 "icon-tint",
                 "icon-color"
             ]
@@ -241,5 +242,11 @@
         "default": "rgb(255,255,255)",
         "dependency": "icon-tint",
         "description": "Icon colour"
+    },
+    "custom-icons": {
+        "type": "switch",
+        "default": true,
+        "description": "Use the extension's own icons for some tray apps (9Router)",
+        "tooltip": "9Router gets a sharp SVG icon. With one colour on, only its logo is drawn, without the tile."
     }
 }

@@ -5,6 +5,13 @@ const Settings = imports.ui.settings;
 const Util = imports.misc.util;
 
 const UUID = 'floating-panel@fellixtara';
+let extensionDir = null;
+
+// Tray icons replaced by the extension's own SVGs: the tray icon's name, the
+// icon for normal use and the logo alone for one-colour mode (in icons/).
+const CUSTOM_ICONS = [
+    { name: 'tray_linux_release', title: '9Router', color: '9router.svg', symbolic: '9router-symbolic.svg' },
+];
 
 // Inline style that takes the theme's own look off the panel, so only the
 // pills show.
@@ -100,6 +107,7 @@ class FloatingPanel {
         this.settings.bind('gtk-menus', 'gtk_menus', () => this._queueGtkMenus());
         this.settings.bind('icon-tint', 'icon_tint', () => this._tintIcons(true));
         this.settings.bind('icon-color', 'icon_color', () => this._tintIcons(true));
+        this.settings.bind('custom-icons', 'custom_icons', () => this._tintIcons(true));
         // A new theme drops the stylesheets loaded into the old one.
         this._themeSetId = Main.themeManager.connect('theme-set', () => {
             this._menuStylesheet = null;
@@ -180,6 +188,71 @@ class FloatingPanel {
     }
 
     // The tray icons sent as pictures: their actor and the picture's file.
+    // The tray icons of xapp-status (one object per icon).
+    _statusIcons() {
+        let icons = [];
+        for (let applet of imports.ui.appletManager.getRunningInstancesForUuid('xapp-status@cinnamon.org') || [])
+            for (let key in applet.statusIcons || {})
+                icons.push(applet.statusIcons[key]);
+        return icons;
+    }
+
+    // Puts the extension's icon in place of the app's, and keeps it there
+    // when the app sends a new icon. `off` gives the app its icon back.
+    _customIcons(off) {
+        for (let icon of this._statusIcons()) {
+            let custom = !off && this.custom_icons && icon.proxy &&
+                CUSTOM_ICONS.find(entry => entry.name === icon.proxy.name);
+            if (!custom) {
+                if (icon._floatingCustom) {
+                    icon.setIconName = icon._floatingSetIconName;
+                    icon._onImageLoaded = icon._floatingOnImageLoaded;
+                    delete icon._floatingSetIconName;
+                    delete icon._floatingOnImageLoaded;
+                    delete icon._floatingCustom;
+                    icon.icon_loader_handle = null;
+                    icon.setIconName(icon.proxy.icon_name);
+                }
+                continue;
+            }
+            if (!icon._floatingCustom) {
+                icon._floatingSetIconName = icon.setIconName;
+                icon._floatingOnImageLoaded = icon._onImageLoaded;
+                let self = this;
+                // The app's own icon is still loaded (the icon size and
+                // the "out of sync" check depend on it), then replaced.
+                icon.setIconName = function (name) {
+                    this._floatingSetIconName.call(this, name);
+                    self._showCustomIcon(this);
+                };
+                icon._onImageLoaded = function (...args) {
+                    this._floatingOnImageLoaded.apply(this, args);
+                    self._showCustomIcon(this);
+                };
+            }
+            icon._floatingCustom = custom;
+            this._showCustomIcon(icon);
+        }
+    }
+
+    _showCustomIcon(icon) {
+        let custom = icon._floatingCustom;
+        if (!custom)
+            return;
+        let file = this.icon_tint ? custom.symbolic : custom.color;
+        let child = icon.icon_holder.child;
+        if (child && child._floatingFile === file && child.icon_size === icon.iconSize)
+            return;
+        let actor = new St.Icon({
+            gicon: new Gio.FileIcon({ file: extensionDir.get_child('icons').get_child(file) }),
+            icon_size: icon.iconSize || 16,
+            icon_type: St.IconType.FULLCOLOR,
+        });
+        actor._floatingFile = file;
+        icon.icon_holder.child = actor;
+        icon.icon_holder.show();
+    }
+
     _pictureFiles() {
         let files = new Map();
         for (let applet of imports.ui.appletManager.getRunningInstancesForUuid('xapp-status@cinnamon.org') || []) {
@@ -225,6 +298,7 @@ class FloatingPanel {
     // option is on.
     _tintIcons(reset, off = false) {
         let on = this.icon_tint && !off;
+        this._customIcons(off);
         let color = this._tintColor();
         let files = on ? this._pictureFiles() : new Map();
         for (let panel of this._panels()) {
@@ -251,12 +325,14 @@ class FloatingPanel {
                 actor.queue_redraw();
             }
         }
-        if (on && !this._tintTimeout) {
+        // Tray icons come and go (an app starts, the tray service restarts).
+        let watch = on || (this.custom_icons && !off);
+        if (watch && !this._tintTimeout) {
             this._tintTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
                 this._tintIcons(false);
                 return GLib.SOURCE_CONTINUE;
             });
-        } else if (!on && this._tintTimeout) {
+        } else if (!watch && this._tintTimeout) {
             GLib.source_remove(this._tintTimeout);
             this._tintTimeout = 0;
         }
@@ -624,6 +700,7 @@ class FloatingPanel {
 }
 
 function init(metadata) {
+    extensionDir = Gio.File.new_for_path(metadata.path);
 }
 
 function enable() {
