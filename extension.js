@@ -1,4 +1,4 @@
-const { Clutter, Gio, GLib, St } = imports.gi;
+const { Clutter, GdkPixbuf, Gio, GLib, GObject, St } = imports.gi;
 const Main = imports.ui.main;
 const Panel = imports.ui.panel;
 const Settings = imports.ui.settings;
@@ -26,6 +26,59 @@ const TRAY_APPS = [
 ];
 
 const TINT_EFFECT = 'floating-panel-tint';
+
+// The fragment shaders that redraw an icon in the colour (tr, tg, tb).
+//  flat:     every pixel takes the colour (texts).
+//  badge:    the same, but coloured dots keep their colours (theme icons).
+//  glyph:    a light shape on a dark outline (Slack): the outline goes, the
+//            shape takes the colour, coloured dots (notification badges)
+//            keep their own colours.
+//  knockout: a light shape on a coloured tile (9Router): the tile takes the
+//            colour and the shape becomes a hole, like a symbolic icon.
+const SHADER_HEAD = 'uniform sampler2D tex;\n' +
+    'uniform float tr;\n' +
+    'uniform float tg;\n' +
+    'uniform float tb;\n' +
+    'void main() {\n' +
+    '    vec3 tint = vec3(tr, tg, tb);\n' +
+    '    vec4 c = texture2D(tex, cogl_tex_coord_in[0].st);\n' +
+    '    vec3 rgb = c.a > 0.0 ? c.rgb / c.a : vec3(0.0);\n' +
+    '    float hi = max(rgb.r, max(rgb.g, rgb.b));\n' +
+    '    float lo = min(rgb.r, min(rgb.g, rgb.b));\n' +
+    '    float sat = hi > 0.0 ? (hi - lo) / hi : 0.0;\n' +
+    '    float lum = dot(rgb, vec3(0.299, 0.587, 0.114));\n';
+const KEEP_BADGE = '    if (sat > 0.35 && hi > 0.3) {\n' +
+    '        cogl_color_out = c;\n' +
+    '        return;\n' +
+    '    }\n';
+const SHADERS = {
+    flat: SHADER_HEAD +
+        '    cogl_color_out = vec4(tint * c.a, c.a);\n}\n',
+    badge: SHADER_HEAD + KEEP_BADGE +
+        '    cogl_color_out = vec4(tint * c.a, c.a);\n}\n',
+    glyph: SHADER_HEAD + KEEP_BADGE +
+        '    float k = c.a * smoothstep(0.2, 0.55, lum);\n' +
+        '    cogl_color_out = vec4(tint * k, k);\n}\n',
+    knockout: SHADER_HEAD +
+        '    float white = (1.0 - sat) * lum;\n' +
+        '    float k = c.a * (1.0 - smoothstep(0.55, 0.85, white)) * smoothstep(0.1, 0.3, hi);\n' +
+        '    cogl_color_out = vec4(tint * k, k);\n}\n',
+};
+
+// One effect class per shader: Clutter compiles a class's shader once and
+// shares it between all its effects. A GType name can be registered only
+// once per Cinnamon session, so reloading the extension needs new names.
+const TINT_CLASSES = {};
+const TYPE_SUFFIX = String(Date.now());
+for (let mode in SHADERS) {
+    let source = SHADERS[mode];
+    TINT_CLASSES[mode] = GObject.registerClass({ GTypeName: 'FloatingPanelTint_' + mode + '_' + TYPE_SUFFIX },
+        class extends Clutter.ShaderEffect {
+            vfunc_get_static_shader_source() {
+                return source;
+            }
+        });
+}
 
 let floating = null;
 
@@ -90,58 +143,120 @@ class FloatingPanel {
     }
 
     // The fragment shader that draws an icon as a flat shape of one colour.
-    _tintSource() {
-        let match = String(this.icon_color || '').match(/rgba?\(([^)]+)\)/);
-        let [r, g, b] = match ? match[1].split(',').map(Number) : [255, 255, 255];
-        let rgb = [r, g, b].map(v => (Math.max(0, Math.min(255, v || 0)) / 255).toFixed(4)).join(', ');
-        return 'uniform sampler2D tex;\n' +
-            'void main() {\n' +
-            '    vec4 c = texture2D(tex, cogl_tex_coord_in[0].st);\n' +
-            '    cogl_color_out = vec4(vec3(' + rgb + ') * c.a, c.a);\n' +
-            '}\n';
+    // How to recolour a picture icon, from its pixels: mostly coloured
+    // means a tile (knockout), otherwise a shape (glyph). Cached per file;
+    // apps write a new file whenever their icon changes.
+    _pictureMode(path) {
+        this._modeCache = this._modeCache || new Map();
+        if (this._modeCache.has(path))
+            return this._modeCache.get(path);
+        let mode = 'glyph';
+        try {
+            let pixbuf = GdkPixbuf.Pixbuf.new_from_file(path);
+            if (pixbuf.get_has_alpha() && pixbuf.get_n_channels() === 4) {
+                let pixels = pixbuf.get_pixels(), stride = pixbuf.get_rowstride();
+                let solid = 0, coloured = 0;
+                for (let y = 0; y < pixbuf.get_height(); y++) {
+                    for (let x = 0; x < pixbuf.get_width(); x++) {
+                        let o = y * stride + x * 4;
+                        if (pixels[o + 3] < 128)
+                            continue;
+                        solid++;
+                        let hi = Math.max(pixels[o], pixels[o + 1], pixels[o + 2]);
+                        let lo = Math.min(pixels[o], pixels[o + 1], pixels[o + 2]);
+                        if (hi > 76 && (hi - lo) / hi > 0.4)
+                            coloured++;
+                    }
+                }
+                if (solid && coloured / solid > 0.5)
+                    mode = 'knockout';
+            }
+        } catch (e) {
+        }
+        if (this._modeCache.size > 50)
+            this._modeCache.clear();
+        this._modeCache.set(path, mode);
+        return mode;
+    }
+
+    // The tray icons sent as pictures: their actor and the picture's file.
+    _pictureFiles() {
+        let files = new Map();
+        for (let applet of imports.ui.appletManager.getRunningInstancesForUuid('xapp-status@cinnamon.org') || []) {
+            for (let key in applet.statusIcons || {}) {
+                let icon = applet.statusIcons[key];
+                let name = icon.proxy ? icon.proxy.icon_name : null;
+                if (name && name.startsWith('/'))
+                    files.set(icon.actor, name);
+            }
+        }
+        return files;
     }
 
     // Icons, texts and pictures (tray icons sent as pixmaps) of the
-    // applets in the right zone of each panel.
-    _tintTargets(actor, list) {
-        if (actor instanceof St.Icon || actor instanceof St.Label ||
-            (actor.constructor === Clutter.Actor && actor.get_content())) {
-            list.push(actor);
+    // applets in the right zone of each panel, with how to recolour each.
+    _tintTargets(actor, list, files, file = null) {
+        if (files.has(actor))
+            file = files.get(actor);
+        if (actor instanceof St.Label || actor instanceof St.Icon) {
+            list.push([actor, actor instanceof St.Icon ? 'badge' : 'flat']);
+            return list;
+        }
+        if (actor.constructor === Clutter.Actor && actor.get_content()) {
+            list.push([actor, file ? this._pictureMode(file) : 'glyph']);
             return list;
         }
         for (let child of actor.get_children())
-            this._tintTargets(child, list);
+            this._tintTargets(child, list, files, file);
         return list;
     }
 
-    // `reset`: the colour changed or the option was switched, so existing
-    // effects are replaced; `off`: removes them all (extension disabled). Applets add and replace icons at any time, so
-    // the zone is checked again every two seconds while the option is on.
+    // The colour as three floats for the shaders' uniforms (a tiny offset
+    // keeps whole numbers from being passed as integers).
+    _tintColor() {
+        let match = String(this.icon_color || '').match(/rgba?\(([^)]+)\)/);
+        let rgb = match ? match[1].split(',').map(Number).slice(0, 3) : [255, 255, 255];
+        return rgb.map(v => Math.max(0, Math.min(255, v || 0)) / 255 * 0.999999 + 1e-7);
+    }
+
+    // `reset`: the colour changed or the option was switched; `off`: removes
+    // every effect (extension disabled). Applets add and replace icons at
+    // any time, so the zone is checked again every two seconds while the
+    // option is on.
     _tintIcons(reset, off = false) {
-        let source = this.icon_tint && !off ? this._tintSource() : null;
+        let on = this.icon_tint && !off;
+        let color = this._tintColor();
+        let files = on ? this._pictureFiles() : new Map();
         for (let panel of this._panels()) {
             if (!panel._rightBox)
                 continue;
-            for (let actor of this._tintTargets(panel._rightBox, [])) {
+            for (let [actor, mode] of this._tintTargets(panel._rightBox, [], files)) {
                 let effect = actor.get_effect(TINT_EFFECT);
-                if (effect && (reset || !source)) {
+                if (effect && (!on || !(effect instanceof TINT_CLASSES[mode]))) {
                     actor.remove_effect(effect);
                     effect = null;
                 }
-                if (source && !effect) {
-                    effect = new Clutter.ShaderEffect({ shader_type: Clutter.ShaderType.FRAGMENT_SHADER });
-                    effect.set_shader_source(source);
+                if (!on)
+                    continue;
+                if (!effect) {
+                    effect = new TINT_CLASSES[mode]();
                     effect.set_uniform_value('tex', 0);
                     actor.add_effect_with_name(TINT_EFFECT, effect);
+                } else if (!reset) {
+                    continue;
                 }
+                effect.set_uniform_value('tr', color[0]);
+                effect.set_uniform_value('tg', color[1]);
+                effect.set_uniform_value('tb', color[2]);
+                actor.queue_redraw();
             }
         }
-        if (source && !this._tintTimeout) {
+        if (on && !this._tintTimeout) {
             this._tintTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
                 this._tintIcons(false);
                 return GLib.SOURCE_CONTINUE;
             });
-        } else if (!source && this._tintTimeout) {
+        } else if (!on && this._tintTimeout) {
             GLib.source_remove(this._tintTimeout);
             this._tintTimeout = 0;
         }

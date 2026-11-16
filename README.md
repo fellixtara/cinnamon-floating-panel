@@ -59,7 +59,13 @@ Lalu aktifkan seperti di atas.
 | Give all icons in the right zone one colour | off (setiap app memakai warnanya sendiri) |
 | Icon colour | putih |
 
-Kalau on, setiap ikon dan teks di zona kanan (tray, sound, network, suhu, ...) digambar sebagai bentuk polos satu warna, termasuk ikon berwarna seperti Slack. Detail di dalam ikon berwarna, misalnya angka di ikon kotak, ikut tertutup warna. Ikon yang ditambahkan atau diganti applet ikut diwarnai dalam 2 detik.
+Kalau on, setiap ikon dan teks di zona kanan (tray, sound, network, suhu, ...) memakai satu warna. Ikon gambar dari aplikasi tray dibaca piksel per piksel supaya hasilnya tetap jelas:
+
+- **Bentuk terang dengan garis tepi gelap** (misalnya Slack): garis tepinya dibuang, lalu bentuknya diwarnai.
+- **Kotak berwarna dengan simbol terang** (misalnya 9Router): kotaknya diwarnai dan simbolnya jadi lubang, seperti ikon simbolik.
+- **Titik notifikasi berwarna** (merah, biru, ...) tetap memakai warna aslinya.
+
+Ikon tray tidak diubah ke SVG. Aplikasi mengirim ulang gambar ikonnya setiap kali ada notifikasi, jadi salinan SVG akan ketinggalan. Pewarnaan dilakukan langsung pada gambar yang sedang tampil. Ikon yang ditambahkan atau diganti ikut diwarnai dalam 2 detik.
 
 **Appearance → Dropdown menus** (menu yang dibuka dari applet panel: sound, network, menu, ...)
 
