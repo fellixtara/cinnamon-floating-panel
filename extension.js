@@ -9,8 +9,11 @@ let extensionDir = null;
 
 // Tray icons replaced by the extension's own SVGs: the tray icon's name, the
 // icon for normal use and the logo alone for one-colour mode (in icons/).
+// `unread`: the app marks unread messages with a red badge on its own
+// picture; the icon then shows a red dot (the same file name + '-unread').
 const CUSTOM_ICONS = [
     { name: 'tray_linux_release', title: '9Router', color: '9router.svg', symbolic: '9router-symbolic.svg' },
+    { name: 'telegramdesktop', title: 'Telegram', color: 'telegram.svg', symbolic: 'telegram-symbolic.svg', unread: true },
 ];
 
 // Inline style that takes the theme's own look off the panel, so only the
@@ -268,6 +271,8 @@ class FloatingPanel {
         if (!custom)
             return;
         let file = this.icon_tint ? custom.symbolic : custom.color;
+        if (custom.unread && this._redBadge(icon.proxy.icon_name))
+            file = file.replace(/\.svg$/, '-unread.svg');
         let child = icon.icon_holder.child;
         if (child && child._floatingFile === file && child.icon_size === icon.iconSize)
             return;
@@ -279,6 +284,33 @@ class FloatingPanel {
         actor._floatingFile = file;
         icon.icon_holder.child = actor;
         icon.icon_holder.show();
+    }
+
+    // Whether the app's picture carries a red badge (unread messages; a
+    // muted chat's badge is grey and does not count).
+    _redBadge(path) {
+        if (!path || !path.startsWith('/'))
+            return false;
+        try {
+            let pixbuf = GdkPixbuf.Pixbuf.new_from_file(path);
+            if (pixbuf.get_n_channels() !== 4)
+                return false;
+            let pixels = pixbuf.get_pixels(), stride = pixbuf.get_rowstride();
+            let solid = 0, red = 0;
+            for (let y = 0; y < pixbuf.get_height(); y++) {
+                for (let x = 0; x < pixbuf.get_width(); x++) {
+                    let o = y * stride + x * 4;
+                    if (pixels[o + 3] < 128)
+                        continue;
+                    solid++;
+                    if (pixels[o] > 180 && pixels[o + 1] < 110 && pixels[o + 2] < 110)
+                        red++;
+                }
+            }
+            return solid > 0 && red / solid > 0.05;
+        } catch (e) {
+            return false;
+        }
     }
 
     _pictureFiles() {
