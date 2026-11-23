@@ -72,7 +72,7 @@ Kalau on, setiap ikon dan teks di zona kanan (tray, sound, network, suhu, ...) m
 
 - **Bentuk terang dengan garis tepi gelap** (misalnya Slack): garis tepinya dibuang, lalu bentuknya diwarnai.
 - **Kotak berwarna dengan simbol terang** (misalnya 9Router): kotaknya diwarnai dan simbolnya jadi lubang, seperti ikon simbolik.
-- **Bentuk gelap untuk panel terang** (misalnya zapfast): bentuknya diwarnai, sedangkan detail yang berlubang tetap berlubang.
+- **Bentuk gelap untuk panel terang**: bentuknya diwarnai, sedangkan detail yang berlubang tetap berlubang.
 - **Titik notifikasi berwarna** (merah, biru, ...) tetap memakai warna aslinya.
 
 **Ikon pengganti.** Beberapa ikon tray diganti dengan SVG milik extension di `icons/`:
