@@ -2,7 +2,7 @@
     "uuid": "floating-panel@fellixtara",
     "name": "Floating Panel",
     "description": "Turns horizontal panels into rounded floating pills: one for the whole panel, or one each for the left, center and right zones, with margins, gap, colour and transparency",
-    "version": "0.7.4",
+    "version": "0.8.0",
     "cinnamon-version": [
         "6.6"
     ],

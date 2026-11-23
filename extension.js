@@ -7,16 +7,24 @@ const Util = imports.misc.util;
 const UUID = 'floating-panel@fellixtara';
 let extensionDir = null;
 
-// Tray icons replaced by the extension's own SVGs: the tray icon's name, the
-// icon for normal use and the logo alone for one-colour mode (in icons/).
-// `unread`: how the app marks unread messages on its own picture; the icon
-// then shows a red dot (the same file name + '-unread'):
+// Tray icons replaced by the extension's own SVGs (in icons/): the tray
+// icon's name (or, for apps that give none, the id of their tray item), the
+// icon for normal use and the logo alone for one-colour mode.
+// `notice`: how the app marks unread messages on its own picture; the icon
+// then gets a notice dot, at `noticeAt` unless the settings move it:
 //   'red'     -> a red badge (a muted chat's grey badge does not count);
-//   'outside' -> a badge that sticks out of the round icon.
+//   'outside' -> a badge that sticks out of the round icon;
+//   'colour'  -> a coloured dot, drawn in the app's colour (Slack: blue for
+//                unread messages, pink for mentions).
+const NOTICE_RED = '#F23B36';
 const CUSTOM_ICONS = [
     { name: 'tray_linux_release', title: '9Router', color: '9router.svg', symbolic: '9router-symbolic.svg' },
-    { name: 'telegramdesktop', title: 'Telegram', color: 'telegram.svg', symbolic: 'telegram-symbolic.svg', unread: 'red' },
-    { name: 'zapfast', title: 'WhatsApp (zapfast)', color: 'whatsapp.svg', symbolic: 'whatsapp-symbolic.svg', unread: 'outside' },
+    { name: 'telegramdesktop', title: 'Telegram', color: 'telegram.svg', symbolic: 'telegram-symbolic.svg',
+        notice: 'red', noticeAt: 'top' },
+    { name: 'zapfast', title: 'WhatsApp (zapfast)', color: 'whatsapp.svg', symbolic: 'whatsapp-symbolic.svg',
+        notice: 'outside', noticeAt: 'top' },
+    { id: /^Slack/, title: 'Slack', color: 'slack.svg', symbolic: 'slack-symbolic.svg',
+        notice: 'colour', noticeAt: 'bottom' },
 ];
 
 // Inline style that takes the theme's own look off the panel, so only the
@@ -126,6 +134,10 @@ class FloatingPanel {
         this.settings.bind('icon-tint', 'icon_tint', () => this._tintIcons(true));
         this.settings.bind('icon-color', 'icon_color', () => this._tintIcons(true));
         this.settings.bind('custom-icons', 'custom_icons', () => this._tintIcons(true));
+        this.settings.bind('notice-position', 'notice_position', () => this._tintIcons(true));
+        this.settings.bind('notice-custom', 'notice_custom', () => this._tintIcons(true));
+        this.settings.bind('notice-color', 'notice_color', () => this._tintIcons(true));
+        this._itemIdsActive = true;
         // A new theme drops the stylesheets loaded into the old one.
         this._themeSetId = Main.themeManager.connect('theme-set', () => {
             this._menuStylesheet = null;
@@ -235,8 +247,7 @@ class FloatingPanel {
     // when the app sends a new icon. `off` gives the app its icon back.
     _customIcons(off) {
         for (let icon of this._statusIcons()) {
-            let custom = !off && this.custom_icons && icon.proxy &&
-                CUSTOM_ICONS.find(entry => entry.name === icon.proxy.name);
+            let custom = !off && this.custom_icons && icon.proxy && this._customEntry(icon.proxy.name);
             if (!custom) {
                 if (icon._floatingCustom) {
                     icon.setIconName = icon._floatingSetIconName;
@@ -269,52 +280,162 @@ class FloatingPanel {
         }
     }
 
+    // The CUSTOM_ICONS entry of a tray icon. Apps whose tray item has no
+    // title show up under their bus name (":1.91"); their item's id is
+    // looked up once, and the icons are checked again when it arrives.
+    _customEntry(name) {
+        if (!name)
+            return null;
+        let id = name;
+        if (name.startsWith(':')) {
+            this._itemIds = this._itemIds || new Map();
+            if (!this._itemIds.has(name)) {
+                this._itemIds.set(name, null);
+                Gio.DBus.session.call(name, '/StatusNotifierItem', 'org.freedesktop.DBus.Properties', 'Get',
+                    new GLib.Variant('(ss)', ['org.kde.StatusNotifierItem', 'Id']), null,
+                    Gio.DBusCallFlags.NONE, 2000, null, (connection, result) => {
+                        try {
+                            let value = connection.call_finish(result).deep_unpack()[0].deep_unpack();
+                            this._itemIds.set(name, String(value));
+                            if (this._itemIdsActive)
+                                this._customIcons(false);
+                        } catch (e) {
+                        }
+                    });
+            }
+            id = this._itemIds.get(name);
+            if (!id)
+                return null;
+        }
+        return CUSTOM_ICONS.find(entry => entry.id ? entry.id.test(id) : entry.name === id) || null;
+    }
+
     _showCustomIcon(icon) {
         let custom = icon._floatingCustom;
         if (!custom)
             return;
-        let file = this.icon_tint ? custom.symbolic : custom.color;
-        if (custom.unread && this._unreadBadge(icon.proxy.icon_name, custom.unread))
-            file = file.replace(/\.svg$/, '-unread.svg');
+        let base = this.icon_tint ? custom.symbolic : custom.color;
+        let file = extensionDir.get_child('icons').get_child(base);
+        let notice = custom.notice ? this._notice(icon.proxy.icon_name, custom.notice) : null;
+        if (notice) {
+            let at = this.notice_position === 'top' || this.notice_position === 'bottom' ?
+                this.notice_position : custom.noticeAt;
+            let color = this.notice_custom ? this._hexColor(this.notice_color) : notice;
+            file = this._noticeFile(base, at, color) || file;
+        }
+        let key = file.get_path();
         let child = icon.icon_holder.child;
-        if (child && child._floatingFile === file && child.icon_size === icon.iconSize)
+        if (child && child._floatingFile === key && child.icon_size === icon.iconSize)
             return;
         let actor = new St.Icon({
-            gicon: new Gio.FileIcon({ file: extensionDir.get_child('icons').get_child(file) }),
+            gicon: new Gio.FileIcon({ file }),
             icon_size: icon.iconSize || 16,
             icon_type: St.IconType.FULLCOLOR,
         });
-        actor._floatingFile = file;
+        actor._floatingFile = key;
         icon.icon_holder.child = actor;
         icon.icon_holder.show();
+        // The new icon gets its colour right away, not at the next check.
+        if (this.icon_tint && !this._tintIdle) {
+            this._tintIdle = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                this._tintIdle = 0;
+                if (this._itemIdsActive)
+                    this._tintIcons(false);
+                return GLib.SOURCE_REMOVE;
+            });
+        }
     }
 
-    // Whether the app's picture shows unread messages (see CUSTOM_ICONS).
-    _unreadBadge(path, kind) {
+    // The notice dot's colour when the app's picture shows unread messages
+    // (see CUSTOM_ICONS), otherwise null. Cached per file and version.
+    _notice(path, kind) {
         if (!path || !path.startsWith('/'))
-            return false;
+            return null;
+        let key = kind + ':' + path;
+        try {
+            let info = Gio.File.new_for_path(path).query_info('time::modified,time::modified-usec,standard::size',
+                Gio.FileQueryInfoFlags.NONE, null);
+            key += ':' + info.get_attribute_uint64('time::modified') + '.' +
+                info.get_attribute_uint32('time::modified-usec') + ':' + info.get_size();
+        } catch (e) {
+        }
+        this._noticeCache = this._noticeCache || new Map();
+        if (this._noticeCache.has(key))
+            return this._noticeCache.get(key);
+        let notice = null;
         try {
             let pixbuf = GdkPixbuf.Pixbuf.new_from_file(path);
-            if (pixbuf.get_n_channels() !== 4)
-                return false;
-            let pixels = pixbuf.get_pixels(), stride = pixbuf.get_rowstride();
-            let width = pixbuf.get_width(), height = pixbuf.get_height();
-            let radius = Math.min(width, height) / 2;
-            let solid = 0, found = 0;
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    let o = y * stride + x * 4;
-                    if (pixels[o + 3] < 128)
-                        continue;
-                    solid++;
-                    if (kind === 'red' ? pixels[o] > 180 && pixels[o + 1] < 110 && pixels[o + 2] < 110
-                        : Math.hypot(x + 0.5 - width / 2, y + 0.5 - height / 2) > radius + 0.5)
-                        found++;
+            if (pixbuf.get_n_channels() === 4) {
+                let pixels = pixbuf.get_pixels(), stride = pixbuf.get_rowstride();
+                let width = pixbuf.get_width(), height = pixbuf.get_height();
+                let radius = Math.min(width, height) / 2;
+                let solid = 0, found = 0, sum = [0, 0, 0];
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        let o = y * stride + x * 4;
+                        if (pixels[o + 3] < 128)
+                            continue;
+                        solid++;
+                        let r = pixels[o], g = pixels[o + 1], b = pixels[o + 2];
+                        let hi = Math.max(r, g, b), lo = Math.min(r, g, b);
+                        let hit = kind === 'red' ? r > 180 && g < 110 && b < 110
+                            : kind === 'outside' ? Math.hypot(x + 0.5 - width / 2, y + 0.5 - height / 2) > radius + 0.5
+                            : hi > 76 && (hi - lo) / hi > 0.4;
+                        if (hit) {
+                            found++;
+                            sum[0] += r;
+                            sum[1] += g;
+                            sum[2] += b;
+                        }
+                    }
                 }
+                let share = solid ? found / solid : 0;
+                if (share > (kind === 'outside' ? 0.02 : 0.05))
+                    notice = kind === 'colour' ?
+                        this._hexColor('rgb(' + sum.map(v => Math.round(v / found)).join(',') + ')') : NOTICE_RED;
             }
-            return solid > 0 && found / solid > (kind === 'red' ? 0.05 : 0.02);
         } catch (e) {
-            return false;
+        }
+        if (this._noticeCache.size > 50)
+            this._noticeCache.clear();
+        this._noticeCache.set(key, notice);
+        return notice;
+    }
+
+    _hexColor(css) {
+        let match = String(css || '').match(/rgba?\(([^)]+)\)/);
+        let rgb = match ? match[1].split(',').map(Number).slice(0, 3) : [242, 59, 54];
+        return '#' + rgb.map(v => Math.max(0, Math.min(255, Math.round(v || 0))).toString(16).padStart(2, '0')).join('');
+    }
+
+    // The icon with a notice dot at the top or bottom right, cut out of the
+    // logo with a thin gap; written once per icon, place and colour.
+    _noticeFile(base, at, color) {
+        let dir = GLib.build_filenamev([GLib.get_user_runtime_dir(), UUID, 'notice']);
+        let file = Gio.File.new_for_path(GLib.build_filenamev([dir,
+            base.replace(/\.svg$/, '') + '-' + at + '-' + color.slice(1) + '.svg']));
+        if (file.query_exists(null))
+            return file;
+        try {
+            let [, bytes] = extensionDir.get_child('icons').get_child(base).load_contents(null);
+            let text = imports.byteArray.toString(bytes);
+            let open = text.match(/<svg[^>]*>/)[0];
+            let box = (open.match(/viewBox="([^"]+)"/) || [null, '0 0 600 600'])[1].split(/[\s,]+/).map(Number);
+            let inner = text.slice(text.indexOf(open) + open.length, text.lastIndexOf('</svg>'));
+            let size = Math.min(box[2], box[3]);
+            let cx = box[0] + box[2] - size * 0.17;
+            let cy = at === 'top' ? box[1] + size * 0.17 : box[1] + box[3] - size * 0.17;
+            let svg = open + '\n  <defs><mask id="floating-notice">' +
+                `<rect x="${box[0]}" y="${box[1]}" width="${box[2]}" height="${box[3]}" fill="#fff"/>` +
+                `<circle cx="${cx}" cy="${cy}" r="${size * 0.215}" fill="#000"/></mask></defs>\n` +
+                `  <g mask="url(#floating-notice)">${inner}</g>\n` +
+                `  <circle cx="${cx}" cy="${cy}" r="${size * 0.16}" fill="${color}"/>\n</svg>\n`;
+            GLib.mkdir_with_parents(dir, 0o700);
+            file.replace_contents(svg, null, false, Gio.FileCreateFlags.NONE, null);
+            return file;
+        } catch (e) {
+            global.logError(UUID + ': could not draw the notice dot: ' + e);
+            return null;
         }
     }
 
@@ -780,6 +901,11 @@ class FloatingPanel {
     }
 
     destroy() {
+        this._itemIdsActive = false;
+        if (this._tintIdle) {
+            GLib.source_remove(this._tintIdle);
+            this._tintIdle = 0;
+        }
         let proto = Panel.Panel.prototype;
         for (let name in this._originals)
             proto[name] = this._originals[name];

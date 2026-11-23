@@ -83,6 +83,9 @@
             "title": "Right panel icons",
             "keys": [
                 "custom-icons",
+                "notice-position",
+                "notice-custom",
+                "notice-color",
                 "icon-tint",
                 "icon-color"
             ]
@@ -246,7 +249,32 @@
     "custom-icons": {
         "type": "switch",
         "default": true,
-        "description": "Use the extension's own icons for some tray apps (9Router)",
-        "tooltip": "9Router gets a sharp SVG icon. With one colour on, only its logo is drawn, without the tile."
+        "description": "Use the extension's own icons for some tray apps (9Router, Telegram, WhatsApp/zapfast, Slack)",
+        "tooltip": "Sharp SVG icons for these apps, with a notice dot when they have unread messages. With one colour on, only the logos are drawn."
+    },
+    "notice-position": {
+        "type": "combobox",
+        "default": "default",
+        "dependency": "custom-icons",
+        "description": "Notice dot position",
+        "options": {
+            "Default (where each app puts it)": "default",
+            "Top right (like Telegram)": "top",
+            "Bottom right (like Slack)": "bottom"
+        },
+        "tooltip": "Where the dot for unread messages sits on the Telegram, WhatsApp (zapfast) and Slack icons."
+    },
+    "notice-custom": {
+        "type": "switch",
+        "default": false,
+        "dependency": "custom-icons",
+        "description": "Give the notice dots one colour",
+        "tooltip": "Off: each app's colour (Telegram and WhatsApp red, Slack blue for messages and pink for mentions)."
+    },
+    "notice-color": {
+        "type": "colorchooser",
+        "default": "rgb(242,59,54)",
+        "dependency": "notice-custom",
+        "description": "Notice colour"
     }
 }

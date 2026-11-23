@@ -64,30 +64,51 @@ Lalu aktifkan seperti di atas.
 
 | Opsi | Default |
 |---|---|
-| Use the extension's own icons for some tray apps (9Router, Telegram, WhatsApp/zapfast) | on |
+| Use the extension's own icons for some tray apps (9Router, Telegram, WhatsApp/zapfast, Slack) | on |
+| Notice dot position | Default (posisi bawaan tiap app) |
+| Give the notice dots one colour | off (warna tiap app) |
+| Notice colour | merah `rgb(242, 59, 54)` |
 | Give all icons in the right zone one colour | off (setiap app memakai warnanya sendiri) |
 | Icon colour | putih |
 
 Kalau on, setiap ikon dan teks di zona kanan (tray, sound, network, suhu, ...) memakai satu warna. Ikon gambar dari aplikasi tray dibaca piksel per piksel supaya hasilnya tetap jelas:
 
-- **Bentuk terang dengan garis tepi gelap** (misalnya Slack): garis tepinya dibuang, lalu bentuknya diwarnai.
+- **Bentuk terang dengan garis tepi gelap**: garis tepinya dibuang, lalu bentuknya diwarnai.
 - **Kotak berwarna dengan simbol terang** (misalnya 9Router): kotaknya diwarnai dan simbolnya jadi lubang, seperti ikon simbolik.
 - **Bentuk gelap untuk panel terang**: bentuknya diwarnai, sedangkan detail yang berlubang tetap berlubang.
 - **Titik notifikasi berwarna** (merah, biru, ...) tetap memakai warna aslinya.
 
 **Ikon pengganti.** Beberapa ikon tray diganti dengan SVG milik extension di `icons/`:
 
-- **9Router** (nama ikon tray `tray_linux_release`)
-  - Default: `9router.svg`, logo jaringan putih di atas kotak oranye.
-  - Mode satu warna: `9router-symbolic.svg`, logo saja tanpa kotak, diwarnai dengan warna pilihan.
-- **Telegram** (`telegramdesktop`). Gambar tray bawaannya berupa lingkaran kecil yang tertutup angka notifikasi, jadi hampir tidak terlihat.
-  - Default: `telegram.svg`, pesawat kertas biru.
-  - Mode satu warna: `telegram-symbolic.svg`, pesawat kertas dengan warna pilihan.
-  - Ada pesan belum dibaca: tampil titik merah di pojok kanan atas (`*-unread.svg`), seperti Slack. Titik merah tetap merah di mode satu warna. Extension membacanya dari tanda merah di gambar tray Telegram. Chat yang di-mute (tanda abu-abu) tidak memunculkan titik merah.
-- **WhatsApp lewat zapfast** (`zapfast`). Gambar tray bawaannya lingkaran hitam yang tidak terlihat di panel gelap.
-  - Default: `whatsapp.svg`, logo WhatsApp hijau.
-  - Mode satu warna: `whatsapp-symbolic.svg`, logo dengan warna pilihan.
-  - Ada pesan belum dibaca: tampil titik merah, sama seperti Telegram. Zapfast menandainya dengan lingkaran "9+" yang menonjol keluar dari ikon bulatnya, dan tanda itulah yang dibaca extension.
+| App (nama/id ikon tray) | Default | Mode satu warna | Titik notice bawaan |
+|---|---|---|---|
+| 9Router (`tray_linux_release`) | `9router.svg`, logo putih di kotak oranye | `9router-symbolic.svg`, logo saja | - |
+| Telegram (`telegramdesktop`) | `telegram.svg`, pesawat kertas biru | `telegram-symbolic.svg` | kanan atas, merah |
+| WhatsApp lewat zapfast (`zapfast`) | `whatsapp.svg`, logo hijau | `whatsapp-symbolic.svg` | kanan atas, merah |
+| Slack (`Slack_status_icon_*`) | `slack.svg`, logo putih | `slack-symbolic.svg` | kanan bawah, biru (pesan) / pink (mention) |
+
+Alasan diganti: gambar tray Telegram berupa lingkaran kecil yang tertutup angka notifikasi, dan zapfast berupa lingkaran hitam yang tidak terlihat di panel gelap. Slack ikut diganti supaya titik notice-nya bisa dipindah dan diwarnai.
+
+**Titik notice.** Titik muncul kalau gambar tray app menunjukkan ada pesan belum dibaca:
+
+- Telegram: tanda merah di gambarnya. Chat yang di-mute (tanda abu-abu) tidak dihitung.
+- zapfast: lingkaran "9+" yang menonjol keluar dari ikon bulatnya.
+- Slack: titik berwarna di gambarnya. Warnanya ikut dibaca, jadi biru tetap biru dan pink tetap pink.
+
+Opsinya:
+
+- **Notice dot position**
+  - *Default*: posisi bawaan tiap app (Telegram dan WhatsApp di kanan atas, Slack di kanan bawah).
+  - *Top right*: semua titik di kanan atas, seperti Telegram.
+  - *Bottom right*: semua titik di kanan bawah, seperti Slack.
+- **Give the notice dots one colour** dan **Notice colour**: semua titik memakai satu warna. Kalau off, setiap app memakai warnanya sendiri.
+
+Detail lainnya:
+
+- Titik dipotong dari logo dengan celah tipis, jadi tetap terbaca di ikon kecil.
+- Ikon dengan titik dibuat sekali per app, posisi, dan warna, lalu disimpan di `$XDG_RUNTIME_DIR/floating-panel@fellixtara/notice/`.
+- Di mode satu warna, titik tetap memakai warnanya sendiri. Pengecualiannya warna notice yang hampir abu-abu (putih, abu, hitam): titik itu ikut warna ikon.
+- Slack tidak memberi nama pada ikon tray-nya (nama yang terlihat hanya alamat bus seperti `:1.91`). Karena itu extension menanyakan id item tray-nya (`Slack_status_icon_1`) lewat D-Bus.
 
 Daftar penggantinya ada di `CUSTOM_ICONS` di `extension.js`. Ikon tray lain tidak diubah ke SVG. Aplikasi mengirim ulang gambar ikonnya setiap kali ada notifikasi, jadi salinan SVG akan ketinggalan. Pewarnaan dilakukan langsung pada gambar yang sedang tampil. Ikon aplikasi baru di panel kanan, atau ikon yang diganti aplikasinya, otomatis ikut diwarnai dalam 2 detik. Ikon gambar dan ikon berwarna penuh diberi opasitas yang sama dengan teks panel tema (Orchis-Dark: 70%), jadi kecerahannya sama dengan ikon simbolik seperti Bluetooth.
 
