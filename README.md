@@ -64,7 +64,7 @@ Lalu aktifkan seperti di atas.
 
 | Opsi | Default |
 |---|---|
-| Use the extension's own icons for some tray apps (9Router, Telegram) | on |
+| Use the extension's own icons for some tray apps (9Router, Telegram, WhatsApp/zapfast) | on |
 | Give all icons in the right zone one colour | off (setiap app memakai warnanya sendiri) |
 | Icon colour | putih |
 
@@ -84,6 +84,10 @@ Kalau on, setiap ikon dan teks di zona kanan (tray, sound, network, suhu, ...) m
   - Default: `telegram.svg`, pesawat kertas biru.
   - Mode satu warna: `telegram-symbolic.svg`, pesawat kertas dengan warna pilihan.
   - Ada pesan belum dibaca: tampil titik merah di pojok kanan atas (`*-unread.svg`), seperti Slack. Titik merah tetap merah di mode satu warna. Extension membacanya dari tanda merah di gambar tray Telegram. Chat yang di-mute (tanda abu-abu) tidak memunculkan titik merah.
+- **WhatsApp lewat zapfast** (`zapfast`). Gambar tray bawaannya lingkaran hitam yang tidak terlihat di panel gelap.
+  - Default: `whatsapp.svg`, logo WhatsApp hijau.
+  - Mode satu warna: `whatsapp-symbolic.svg`, logo dengan warna pilihan.
+  - Ada pesan belum dibaca: tampil titik merah, sama seperti Telegram. Zapfast menandainya dengan lingkaran "9+" yang menonjol keluar dari ikon bulatnya, dan tanda itulah yang dibaca extension.
 
 Daftar penggantinya ada di `CUSTOM_ICONS` di `extension.js`. Ikon tray lain tidak diubah ke SVG. Aplikasi mengirim ulang gambar ikonnya setiap kali ada notifikasi, jadi salinan SVG akan ketinggalan. Pewarnaan dilakukan langsung pada gambar yang sedang tampil. Ikon aplikasi baru di panel kanan, atau ikon yang diganti aplikasinya, otomatis ikut diwarnai dalam 2 detik. Ikon gambar dan ikon berwarna penuh diberi opasitas yang sama dengan teks panel tema (Orchis-Dark: 70%), jadi kecerahannya sama dengan ikon simbolik seperti Bluetooth.
 

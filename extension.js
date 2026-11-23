@@ -9,11 +9,14 @@ let extensionDir = null;
 
 // Tray icons replaced by the extension's own SVGs: the tray icon's name, the
 // icon for normal use and the logo alone for one-colour mode (in icons/).
-// `unread`: the app marks unread messages with a red badge on its own
-// picture; the icon then shows a red dot (the same file name + '-unread').
+// `unread`: how the app marks unread messages on its own picture; the icon
+// then shows a red dot (the same file name + '-unread'):
+//   'red'     -> a red badge (a muted chat's grey badge does not count);
+//   'outside' -> a badge that sticks out of the round icon.
 const CUSTOM_ICONS = [
     { name: 'tray_linux_release', title: '9Router', color: '9router.svg', symbolic: '9router-symbolic.svg' },
-    { name: 'telegramdesktop', title: 'Telegram', color: 'telegram.svg', symbolic: 'telegram-symbolic.svg', unread: true },
+    { name: 'telegramdesktop', title: 'Telegram', color: 'telegram.svg', symbolic: 'telegram-symbolic.svg', unread: 'red' },
+    { name: 'zapfast', title: 'WhatsApp (zapfast)', color: 'whatsapp.svg', symbolic: 'whatsapp-symbolic.svg', unread: 'outside' },
 ];
 
 // Inline style that takes the theme's own look off the panel, so only the
@@ -271,7 +274,7 @@ class FloatingPanel {
         if (!custom)
             return;
         let file = this.icon_tint ? custom.symbolic : custom.color;
-        if (custom.unread && this._redBadge(icon.proxy.icon_name))
+        if (custom.unread && this._unreadBadge(icon.proxy.icon_name, custom.unread))
             file = file.replace(/\.svg$/, '-unread.svg');
         let child = icon.icon_holder.child;
         if (child && child._floatingFile === file && child.icon_size === icon.iconSize)
@@ -286,9 +289,8 @@ class FloatingPanel {
         icon.icon_holder.show();
     }
 
-    // Whether the app's picture carries a red badge (unread messages; a
-    // muted chat's badge is grey and does not count).
-    _redBadge(path) {
+    // Whether the app's picture shows unread messages (see CUSTOM_ICONS).
+    _unreadBadge(path, kind) {
         if (!path || !path.startsWith('/'))
             return false;
         try {
@@ -296,18 +298,21 @@ class FloatingPanel {
             if (pixbuf.get_n_channels() !== 4)
                 return false;
             let pixels = pixbuf.get_pixels(), stride = pixbuf.get_rowstride();
-            let solid = 0, red = 0;
-            for (let y = 0; y < pixbuf.get_height(); y++) {
-                for (let x = 0; x < pixbuf.get_width(); x++) {
+            let width = pixbuf.get_width(), height = pixbuf.get_height();
+            let radius = Math.min(width, height) / 2;
+            let solid = 0, found = 0;
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
                     let o = y * stride + x * 4;
                     if (pixels[o + 3] < 128)
                         continue;
                     solid++;
-                    if (pixels[o] > 180 && pixels[o + 1] < 110 && pixels[o + 2] < 110)
-                        red++;
+                    if (kind === 'red' ? pixels[o] > 180 && pixels[o + 1] < 110 && pixels[o + 2] < 110
+                        : Math.hypot(x + 0.5 - width / 2, y + 0.5 - height / 2) > radius + 0.5)
+                        found++;
                 }
             }
-            return solid > 0 && red / solid > 0.05;
+            return solid > 0 && found / solid > (kind === 'red' ? 0.05 : 0.02);
         } catch (e) {
             return false;
         }
